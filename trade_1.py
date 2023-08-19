@@ -2,7 +2,6 @@ import logging, json, smtplib, pytz, warnings
 from pathlib import Path
 import numpy as np
 import pandas as pd
-from alpha_vantage.timeseries import TimeSeries
 from ta.momentum import RSIIndicator
 from ta.volatility import BollingerBands
 from ta.trend import EMAIndicator
@@ -30,7 +29,6 @@ else:
     log_data = {"position": 0, "entry_price": 0, "max_price": 0, "min_price": 0}
 
 logging.basicConfig(filename="algorithm.log", level=logging.INFO)
-ts = TimeSeries(key='W2M26ZFTBGD9UAJN', output_format='pandas')
 
 def train_model(env, model_save_path='ppo_model.pkl'):
     model = PPO('MlpPolicy', env, verbose=1, n_steps=2048, ent_coef=0.005, learning_rate=0.00025, vf_coef=0.5, max_grad_norm=0.5, gae_lambda=0.95, n_epochs=4, clip_range=0.2, clip_range_vf=None)
@@ -41,24 +39,13 @@ def train_model(env, model_save_path='ppo_model.pkl'):
 def load_model(model_save_path='ppo_model.pkl'):
     model = PPO.load(model_save_path)
     return model
-
-
 def prepare_data(data):
     data = data.dropna()
-    if 'Close' in data.columns:
-        features = data.drop('Close', axis=1)
-        targets = data['Close'].shift(-1).dropna()
-    elif '4. close' in data.columns:
-        features = data.drop('4. close', axis=1)
-        targets = data['4. close'].shift(-1).dropna()
-    else:
-        print("Close price column not found. Generating average of 'High' and 'Low' as 'Close' price...")
-        data['Close'] = (data['High'] + data['Low']) / 2
-        features = data.drop('Close', axis=1)
-        targets = data['Close'].shift(-1).dropna()
-
+    features = data.drop('Close', axis=1)
+    targets = data['Close'].shift(-1).dropna()
     features = features[:-1]
     return features, targets
+
 
 def send_email(subject, message_body):
     sender_email = 'chatGptTrade@gmail.com'
@@ -84,7 +71,7 @@ def is_market_open():
 symbol = 'GPRO'
 model_save_path = 'ppo_model.pkl'
 
-data, _ = ts.get_daily_adjusted(symbol=symbol, outputsize='full')
+data = yf.download(symbol, period="5y")
 data = data.sort_index(ascending=True)
 
 features, targets = prepare_data(data)
@@ -120,7 +107,7 @@ while True:
         obs = env.reset()
         action, _ = model.predict(obs, deterministic=True)
         obs, reward, done, info = env.step(action)
-        data, _ = ts.get_intraday(symbol='GPRO', interval='15min')
+        data = yf.download(symbol='GPRO', period="1d", interval="15m")
         ema_indicator_20 = EMAIndicator(data['4. close'], window=20)
         ema_indicator_50 = EMAIndicator(data['4. close'], window=50)
         data['EMA20'] = ema_indicator_20.ema_indicator()
