@@ -114,26 +114,28 @@ last_action = None
 while True:
     if True:
     #if is_market_open():
+        print('in true')
         obs = env.reset()
         data = yf.download(symbol, period="1d", interval="15m")
-        
         ema_indicator_20 = EMAIndicator(data['Close'], window=20)
         ema_indicator_50 = EMAIndicator(data['Close'], window=50)
         data['EMA20'] = ema_indicator_20.ema_indicator()
         data['EMA50'] = ema_indicator_50.ema_indicator()
         rsi_indicator = RSIIndicator(data['Close'])
         data['RSI'] = rsi_indicator.rsi()
-        
+        print('Getting current RSI, EMA20, EMA50')
         # Getting current RSI, EMA20, EMA50
         current_rsi = data['RSI'].iloc[-1]
         current_ema20 = data['EMA20'].iloc[-1]
         current_ema50 = data['EMA50'].iloc[-1]
-        
+        print('model_prediction')
         model_prediction, _ = model.predict(obs, deterministic=True)
-        
+        print('action')
         # Now we take the action based on our new decision-making function
         action = make_decision(model_prediction, current_rsi, current_ema20, current_ema50)
-        
+        print( action)
+        print(env.current_price)
+       
         if action is not None:
             obs, reward, done, info = env.step(action)
         else:
@@ -141,8 +143,8 @@ while True:
             # For example, you can skip the step and log a warning.
             logging.warning("Action is None, skipping this step.")
             continue
+
         
-        print(env.current_price)
         if action != last_action:
             last_action = action
             if action == 1:  # Buy
