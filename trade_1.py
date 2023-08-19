@@ -114,8 +114,8 @@ min_price = 0
 entry_price = 0
 last_action = None
 while True:
-    #if True:
-    if is_market_open():
+    if True:
+    #if is_market_open():
         print('market is open')
         obs = env.reset()
         action, _ = model.predict(obs, deterministic=True)
