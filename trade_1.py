@@ -30,6 +30,16 @@ else:
 
 logging.basicConfig(filename="algorithm.log", level=logging.INFO)
 
+def make_decision(model_prediction, rsi_value, ema20, ema50):
+    if model_prediction == 1 and rsi_value < 30 and ema20 > ema50: # Over-sold and uptrend
+        return 1
+    elif model_prediction == 2 and rsi_value > 70 and ema20 < ema50: # Over-bought and downtrend
+        return 2
+    elif model_prediction == 3:
+        return 3
+    else:
+        return 
+
 def train_model(env, model_save_path='ppo_model.pkl'):
     model = PPO('MlpPolicy', env, verbose=1, n_steps=2048, ent_coef=0.005, learning_rate=0.00025, vf_coef=0.5, max_grad_norm=0.5, gae_lambda=0.95, n_epochs=4, clip_range=0.2, clip_range_vf=None)
     model.learn(total_timesteps=100000)
@@ -83,6 +93,7 @@ today = datetime.today()
 start_date = today - relativedelta(months=6)
 end_date = today - relativedelta(days=1)
 data = yf.download(symbol, start=start_date, end=end_date)
+print(data.columns)
 features, targets = prepare_data(data)
 env = CustomTradingEnvironment(data, features, targets)
 vec_env = DummyVecEnv([lambda: env])
@@ -103,26 +114,34 @@ last_action = None
 while True:
     if True:
     #if is_market_open():
-        print('market is open')
         obs = env.reset()
-        action, _ = model.predict(obs, deterministic=True)
-        obs, reward, done, info = env.step(action)
-        data = yf.download(symbol='GPRO', period="1d", interval="15m")
-        ema_indicator_20 = EMAIndicator(data['4. close'], window=20)
-        ema_indicator_50 = EMAIndicator(data['4. close'], window=50)
+        data = yf.download(symbol, period="1d", interval="15m")
+        
+        ema_indicator_20 = EMAIndicator(data['Close'], window=20)
+        ema_indicator_50 = EMAIndicator(data['Close'], window=50)
         data['EMA20'] = ema_indicator_20.ema_indicator()
         data['EMA50'] = ema_indicator_50.ema_indicator()
-
-        rsi_indicator = RSIIndicator(data['4. close'])
+        rsi_indicator = RSIIndicator(data['Close'])
         data['RSI'] = rsi_indicator.rsi()
-
-        bb_indicator = BollingerBands(data['4. close'])
-        data['BB_upper'] = bb_indicator.bollinger_hband()
-        data['BB_lower'] = bb_indicator.bollinger_lband()
-
-        obs = env.reset()
-        action, _ = model.predict(obs, deterministic=True)
-        obs, reward, done, info = env.step(action)
+        
+        # Getting current RSI, EMA20, EMA50
+        current_rsi = data['RSI'].iloc[-1]
+        current_ema20 = data['EMA20'].iloc[-1]
+        current_ema50 = data['EMA50'].iloc[-1]
+        
+        model_prediction, _ = model.predict(obs, deterministic=True)
+        
+        # Now we take the action based on our new decision-making function
+        action = make_decision(model_prediction, current_rsi, current_ema20, current_ema50)
+        
+        if action is not None:
+            obs, reward, done, info = env.step(action)
+        else:
+            # Handle the case where action is None.
+            # For example, you can skip the step and log a warning.
+            logging.warning("Action is None, skipping this step.")
+            continue
+        
         print(env.current_price)
         if action != last_action:
             last_action = action
