@@ -38,7 +38,7 @@ def make_decision(model_prediction, rsi_value, ema20, ema50):
     elif model_prediction == 3:
         return 3
     else:
-        return 
+        return
 
 def train_model(env, model_save_path='ppo_model.pkl'):
     model = PPO('MlpPolicy', env, verbose=1, n_steps=2048, ent_coef=0.005, learning_rate=0.00025, vf_coef=0.5, max_grad_norm=0.5, gae_lambda=0.95, n_epochs=4, clip_range=0.2, clip_range_vf=None)
@@ -83,6 +83,7 @@ model_save_path = 'ppo_model.pkl'
 
 data = yf.download(symbol, period="5y")
 data = data.sort_index(ascending=True)
+print(data)
 
 features, targets = prepare_data(data)
 env = CustomTradingEnvironment(data, features, targets)
@@ -91,13 +92,11 @@ vec_env = DummyVecEnv([lambda: env])
 
 today = datetime.today()
 start_date = today - relativedelta(months=6)
-end_date = today - relativedelta(days=1)
+end_date = today
 data = yf.download(symbol, start=start_date, end=end_date)
-print(data.columns)
 features, targets = prepare_data(data)
 env = CustomTradingEnvironment(data, features, targets)
 vec_env = DummyVecEnv([lambda: env])
-print(env.current_price)
 train = True
 if train:
     model = train_model(vec_env, model_save_path=model_save_path)
@@ -123,28 +122,24 @@ while True:
         data['EMA50'] = ema_indicator_50.ema_indicator()
         rsi_indicator = RSIIndicator(data['Close'])
         data['RSI'] = rsi_indicator.rsi()
-        print('Getting current RSI, EMA20, EMA50')
         # Getting current RSI, EMA20, EMA50
         current_rsi = data['RSI'].iloc[-1]
         current_ema20 = data['EMA20'].iloc[-1]
         current_ema50 = data['EMA50'].iloc[-1]
-        print('model_prediction')
         model_prediction, _ = model.predict(obs, deterministic=True)
-        print('action')
         # Now we take the action based on our new decision-making function
         action = make_decision(model_prediction, current_rsi, current_ema20, current_ema50)
-        print( action)
-        print(env.current_price)
-       
+
+
         if action is not None:
             obs, reward, done, info = env.step(action)
         else:
             # Handle the case where action is None.
             # For example, you can skip the step and log a warning.
             logging.warning("Action is None, skipping this step.")
-            continue
+            #continue
 
-        
+
         if action != last_action:
             last_action = action
             if action == 1:  # Buy
@@ -191,5 +186,3 @@ while True:
         sleep(60 * 60)  # Sleep for an hour
 
     sleep(60 * 15)  # Sleep for 15 minutes
-
-

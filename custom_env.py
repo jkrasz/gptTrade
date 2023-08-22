@@ -33,8 +33,6 @@ class CustomTradingEnvironment(gym.Env):
     def _get_current_price(self):
         if 'Close' in self.data.columns:
             return self.data['Close'].iloc[-1]
-        elif '4. close' in self.data.columns:
-            return self.data['4. close'].iloc[-1]
         else:
             raise ValueError("The data does not have a recognized close price column.")
 
@@ -83,4 +81,3 @@ class CustomTradingEnvironment(gym.Env):
             reward = 0.0
 
         return float(reward)
-
