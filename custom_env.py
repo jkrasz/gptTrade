@@ -28,23 +28,27 @@ class StockTradingEnv(gym.Env):
         self.current_step = 0
         return self.data.iloc[self.current_step].values
 
+# Use more sophisticated strategies and risk management
     def _calculate_reward(self, action, obs):
         close_price = obs['Close']
-        if action == 1:  # Buying
-            if not self.holding:  # Can buy only if not already holding
+        reward = 0
+        if action == 1:
+            if not self.holding:
                 self.holding = True
                 self.buy_price = close_price
-                return 1  # Encouragement Reward for Buying
+                reward = 1  # Encouragement Reward for Buying
             else:
-                return -1  # Penalty for invalid action
-        elif action == 2:  # Selling
-            if self.holding:  # Can sell only if currently holding
+                reward = -1  # Penalty for invalid action
+        elif action == 2:
+            if self.holding:
                 self.holding = False
                 profit = close_price - self.buy_price
-                return profit  # Profit (could be negative) as Reward
+                reward = profit
             else:
-                return -1  # Penalty for invalid action
-        return 0  # Neutral reward for holding or other actions
+                reward = -1  # Penalty for invalid action
+        # Add sophisticated reward computation here
+        return reward
+
 
     def _calculate_final_reward(self):
         if self.holding:  # Still holding a stock at the end
