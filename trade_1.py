@@ -62,7 +62,8 @@ while True:
     for i in range(len(data)):
       action, _states = model.predict(obs, deterministic=True)
       obs, rewards, done, info = env.step(action)
-      actions.append((i, action, obs['Close']))
+      close_price = data.iloc[i]['Close']
+      actions.append((i, action, close_price))
       if done:
         obs = env.reset()
     print("Simulation Completed!")
