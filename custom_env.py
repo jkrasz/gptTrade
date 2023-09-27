@@ -8,27 +8,30 @@ class StockTradingEnv(gym.Env):
         self.data = data
         self.current_step = 0
         self.action_space = gym.spaces.Discrete(4)  # For 4 discrete actions
-        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(len(data.columns),))  # Modify according to your data
-        self.holding = False  # To keep track of whether we are holding a stock or not
-        self.buy_price = 0  # To store the price at which we bought the stock
+        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(len(data.columns),))
+        self.holding = False
+        self.buy_price = 0
 
     def step(self, action):
         if self.current_step + 1 >= len(self.data):
             done = True
             reward = self._calculate_final_reward()
-            obs = self.data.iloc[self.current_step]  # Return as a Series instead of array
+            obs = self.data.iloc[self.current_step]
         else:
             self.current_step += 1
             done = False
             reward = self._calculate_reward(action, self.data.iloc[self.current_step])
-            obs = self.data.iloc[self.current_step]  # Return as a Series instead of array
-        return obs, reward, done, {}
+            obs = self.data.iloc[self.current_step]
+
+        info = {"action": "Buy" if action == 1 else "Sell", "holding": self.holding, "buy_price": self.buy_price}
+        return obs, reward, done, info
 
     def reset(self):
         self.current_step = 0
+        self.holding = False
+        self.buy_price = 0
         return self.data.iloc[self.current_step].values
 
-# Use more sophisticated strategies and risk management
     def _calculate_reward(self, action, obs):
         close_price = obs['Close']
         reward = 0
@@ -46,12 +49,11 @@ class StockTradingEnv(gym.Env):
                 reward = profit
             else:
                 reward = -1  # Penalty for invalid action
-        # Add sophisticated reward computation here
+        # Modify reward computation based on additional strategies
         return reward
 
-
     def _calculate_final_reward(self):
-        if self.holding:  # Still holding a stock at the end
+        if self.holding:
             final_profit = self.data.iloc[-1]['Close'] - self.buy_price
-            return final_profit  # Could be negative
-        return 0  # No profit or loss
+            return final_profit
+        return 0
