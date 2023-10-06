@@ -45,12 +45,15 @@ data['RSI'] = ta.momentum.rsi(data['Close'])
 data['ATR'] = ta.volatility.average_true_range(data['High'], data['Low'], data['Close'])
 data['EMA'] = ta.trend.ema_indicator(data['Close'])
 data['MFI'] = ta.volume.money_flow_index(data['High'], data['Low'], data['Close'], data['Volume'])
-data['MACD_Line'], data['Signal_Line'] = ta.trend.macd(data['Close'], n_fast=12, n_slow=26, fillna=True)
+macd_indicator = ta.trend.MACD(data['Close'])
+data['MACD_Line'] = macd_indicator.macd()
+data['Signal_Line'] = macd_indicator.macd_signal()
 
 threshold_rsi_sell = 70
 stop_loss_percent = 0.95  # sell if price drops to 95% of buying price
 take_profit_percent = 1.1  # sell if price increases to 110% of buying price
-# ...
+threshold_rsi_buy = 30
+
 data.dropna(inplace=True)
 
 # Define the environment and model
@@ -90,7 +93,7 @@ while True:
                     close_price <= stop_loss_price or close_price >= take_profit_price):
                 in_position = False
                 actions.append((i, "Sell", close_price))
-        
+
         if done:
             obs = env.reset()
     print("Simulation Completed!")
