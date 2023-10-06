@@ -96,4 +96,5 @@ while True:
         send_email("Summary of actions", actions_summary)
         actions = []  # Clear actions after sending email
   else:
-    print("Market is closed")
+    print("Market is closed. Sleeping...")
+    sleep(60 * 15)
