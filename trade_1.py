@@ -33,76 +33,85 @@ def send_email(subject, content):
 
 
 # Fetch the data
-symbol = 'GPRO'
-end_date = datetime.now() - timedelta(days=1)
-data = yf.download(symbol, start="2020-01-01", end=end_date.strftime('%Y-%m-%d'))
 
-# Additional Technical Indicators
-data['SMA_5'] = data['Close'].rolling(window=5).mean()
-data['SMA_20'] = data['Close'].rolling(window=20).mean()
-data['MACD'] = data['Close'].ewm(span=12, adjust=False).mean() - data['Close'].ewm(span=26, adjust=False).mean()
-data['RSI'] = ta.momentum.rsi(data['Close'])
-data['ATR'] = ta.volatility.average_true_range(data['High'], data['Low'], data['Close'])
-data['EMA'] = ta.trend.ema_indicator(data['Close'])
-data['MFI'] = ta.volume.money_flow_index(data['High'], data['Low'], data['Close'], data['Volume'])
-macd_indicator = ta.trend.MACD(data['Close'])
-data['MACD_Line'] = macd_indicator.macd()
-data['Signal_Line'] = macd_indicator.macd_signal()
+
+def fetch_data():
+    symbol = 'GPRO'
+    end_date = datetime.now() - timedelta(days=1)
+    data = yf.download(symbol, start="2020-01-01", end=end_date.strftime('%Y-%m-%d'))
+
+    # Additional Technical Indicators
+    data['SMA_5'] = data['Close'].rolling(window=5).mean()
+    data['SMA_20'] = data['Close'].rolling(window=20).mean()
+    data['MACD'] = data['Close'].ewm(span=12, adjust=False).mean() - data['Close'].ewm(span=26, adjust=False).mean()
+    data['RSI'] = ta.momentum.rsi(data['Close'])
+    data['ATR'] = ta.volatility.average_true_range(data['High'], data['Low'], data['Close'])
+    data['EMA'] = ta.trend.ema_indicator(data['Close'])
+    data['MFI'] = ta.volume.money_flow_index(data['High'], data['Low'], data['Close'], data['Volume'])
+    macd_indicator = ta.trend.MACD(data['Close'])
+    data['MACD_Line'] = macd_indicator.macd()
+    data['Signal_Line'] = macd_indicator.macd_signal()
+    data['RSI_Avg'] = data['RSI'].rolling(window=5).mean()
+    data.dropna(inplace=True)
+    return data
 
 threshold_rsi_sell = 70
 stop_loss_percent = 0.95  # sell if price drops to 95% of buying price
 take_profit_percent = 1.1  # sell if price increases to 110% of buying price
 threshold_rsi_buy = 30
 
-data.dropna(inplace=True)
-
+data = fetch_data()  # Initial fetch
 # Define the environment and model
+
 env = DummyVecEnv([lambda: StockTradingEnv(data)])
 model = PPO("MlpPolicy", env, verbose=1)
 
+last_data_point_index = len(data) - 1  # Last index of the data
 
 actions = []
 in_position = False
+
 while True:
-  if is_market_open():
-  #if True:
-    model.learn(total_timesteps=20000)
-    obs = env.reset()
-    for i in range(len(data)):
-        action, _states = model.predict(obs, deterministic=True)
-        obs, rewards, done, info = env.step(action)
-        close_price = data.iloc[i]['Close']
-        rsi = data.iloc[i]['RSI']
-        macd = data.iloc[i]['MACD_Line']
-        signal = data.iloc[i]['Signal_Line']
-        # Dynamic stop loss and take profit based on ATR
-        atr = data.iloc[i]['ATR']
-        stop_loss_price = close_price - (atr * 1.5)
-        take_profit_price = close_price + (atr * 1.5)
+    if is_market_open():
+        data = fetch_data()  # Update data while the market is open
+        model.learn(total_timesteps=20000)
+        obs = env.reset()
+        last_data_point_index = len(data) - 1  # Update the index for latest data
 
+        for i in range(len(data)):
+            action, _states = model.predict(obs, deterministic=True)
+            obs, rewards, done, info = env.step(action)
+            close_price = data.iloc[i]['Close']
+            rsi = data.iloc[i]['RSI']
+            macd = data.iloc[i]['MACD_Line']
+            signal = data.iloc[i]['Signal_Line']
+            rsi_avg = data.iloc[i]['RSI_Avg']
 
-        if not in_position:
-            # Buy Condition based on RSI and MACD
-            if rsi < threshold_rsi_buy and macd > signal:
-                in_position = True
-                buy_price = close_price
-                actions.append((i, "Buy", close_price))
-        else:
-            # Sell Condition based on RSI and MACD
-            if (rsi > threshold_rsi_sell or macd < signal or
-                    close_price <= stop_loss_price or close_price >= take_profit_price):
-                in_position = False
-                actions.append((i, "Sell", close_price))
+            atr = data.iloc[i]['ATR']
+            stop_loss_price = close_price - (atr * 1.5)
+            take_profit_price = close_price + (atr * 1.5)
 
-        if done:
-            obs = env.reset()
-    print("Simulation Completed!")
+            if not in_position:
+                if rsi < threshold_rsi_buy and macd > signal:
+                    in_position = True
+                    buy_price = close_price
+                    actions.append((i, "Buy", close_price))
+                    if i == last_data_point_index:  # If it's the latest data point
+                        send_email("Buy Signal", f"Buy at price {close_price}")
 
-    # Batch Email Notifications
-    if actions:  # Only send email if there are actions
-        actions_summary = "\n".join([f"{i}: {action} at price {price}" for i, action, price in actions])
-        send_email("Summary of actions", actions_summary)
-        actions = []  # Clear actions after sending email
-  else:
-    print("Market is closed. Sleeping...")
-    sleep(60 * 15)
+            else:
+                if (rsi > rsi_avg or macd < signal or
+                        close_price <= stop_loss_price or close_price >= take_profit_price):
+                    in_position = False
+                    actions.append((i, "Sell", close_price))
+                    if i == last_data_point_index:  # If it's the latest data point
+                        send_email("Sell Signal", f"Sell at price {close_price}")
+
+            if done:
+                obs = env.reset()
+
+        print("Simulation Completed! Sleeping...")
+        sleep(60 * 15)
+    else:
+        print("Market is closed. Sleeping...")
+        sleep(60 * 15)
