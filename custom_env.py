@@ -35,21 +35,41 @@ class StockTradingEnv(gym.Env):
     def _calculate_reward(self, action, obs):
         close_price = obs['Close']
         reward = 0
-        if action == 1:
+
+        if action == 1:  # Buy
             if not self.holding:
                 self.holding = True
                 self.buy_price = close_price
-                reward = 1  # Encouragement Reward for Buying
+                reward = 2  # Encouragement Reward for Buying
             else:
-                reward = -1  # Penalty for invalid action
-        elif action == 2:
+                reward = -5  # Heavier penalty for invalid buy action
+
+        elif action == 2:  # Sell
             if self.holding:
                 self.holding = False
                 profit = close_price - self.buy_price
                 reward = profit
+                if profit > 0:
+                    reward += 5  # Bonus reward for making a profitable sell
             else:
-                reward = -1  # Penalty for invalid action
-        # Modify reward computation based on additional strategies
+                reward = -5  # Heavier penalty for invalid sell action
+
+        elif action == 0:  # Hold
+            if self.holding:
+                reward = close_price - self.buy_price  # Reward or penalize based on holding performance
+
+        # Reward shaping based on indicators
+        rsi = obs['RSI']
+        macd_diff = obs['MACD_Line'] - obs['Signal_Line']
+
+        # Positive reward if RSI suggests oversold and we buy, or overbought and we sell.
+        if (rsi < 30 and action == 1) or (rsi > 70 and action == 2):
+            reward += 3
+
+        # Positive reward for buying when MACD is above signal line and vice-versa
+        if (macd_diff > 0 and action == 1) or (macd_diff < 0 and action == 2):
+            reward += 3
+
         return reward
 
     def _calculate_final_reward(self):

@@ -45,8 +45,8 @@ data['RSI'] = ta.momentum.rsi(data['Close'])
 data['ATR'] = ta.volatility.average_true_range(data['High'], data['Low'], data['Close'])
 data['EMA'] = ta.trend.ema_indicator(data['Close'])
 data['MFI'] = ta.volume.money_flow_index(data['High'], data['Low'], data['Close'], data['Volume'])
-#data['MFI'] = ta.momentum.MFIIndicator(high=data['High'], low=data['Low'], close=data['Close'], volume=data['Volume'], window=14).money_flow_index()
-threshold_rsi_buy = 30
+data['MACD_Line'], data['Signal_Line'] = ta.trend.macd(data['Close'], n_fast=12, n_slow=26, fillna=True)
+
 threshold_rsi_sell = 70
 stop_loss_percent = 0.95  # sell if price drops to 95% of buying price
 take_profit_percent = 1.1  # sell if price increases to 110% of buying price
@@ -70,22 +70,27 @@ while True:
         obs, rewards, done, info = env.step(action)
         close_price = data.iloc[i]['Close']
         rsi = data.iloc[i]['RSI']
+        macd = data.iloc[i]['MACD_Line']
+        signal = data.iloc[i]['Signal_Line']
+        # Dynamic stop loss and take profit based on ATR
+        atr = data.iloc[i]['ATR']
+        stop_loss_price = close_price - (atr * 1.5)
+        take_profit_price = close_price + (atr * 1.5)
+
 
         if not in_position:
-            if action == 1 and rsi < threshold_rsi_buy:  # Buy condition
+            # Buy Condition based on RSI and MACD
+            if rsi < threshold_rsi_buy and macd > signal:
                 in_position = True
                 buy_price = close_price
                 actions.append((i, "Buy", close_price))
-                # Set stop_loss and take_profit price
-                stop_loss_price = buy_price * stop_loss_percent
-                take_profit_price = buy_price * take_profit_percent
         else:
-            if ((action == 2 and rsi > threshold_rsi_sell) or
-                close_price <= stop_loss_price or
-                close_price >= take_profit_price):  # Sell condition
+            # Sell Condition based on RSI and MACD
+            if (rsi > threshold_rsi_sell or macd < signal or
+                    close_price <= stop_loss_price or close_price >= take_profit_price):
                 in_position = False
                 actions.append((i, "Sell", close_price))
-        #...
+        
         if done:
             obs = env.reset()
     print("Simulation Completed!")
