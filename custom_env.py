@@ -1,3 +1,4 @@
+
 import gym
 import numpy as np
 import pandas as pd
@@ -11,6 +12,7 @@ class StockTradingEnv(gym.Env):
         self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(len(data.columns),))
         self.holding = False
         self.buy_price = 0
+        self.leverage = 2  # Increased leverage for more aggressive strategy
 
     def step(self, action):
         if self.current_step + 1 >= len(self.data):
@@ -36,27 +38,28 @@ class StockTradingEnv(gym.Env):
         close_price = obs['Close']
         reward = 0
 
+        # Modified reward function to be more aggressive
         if action == 1:  # Buy
             if not self.holding:
                 self.holding = True
                 self.buy_price = close_price
-                reward = 2  # Encouragement Reward for Buying
+                reward = 5  # Increased reward for buying
             else:
-                reward = -5  # Heavier penalty for invalid buy action
+                reward = -10  # Increased penalty for invalid buy action
 
         elif action == 2:  # Sell
             if self.holding:
                 self.holding = False
-                profit = close_price - self.buy_price
+                profit = (close_price - self.buy_price) * self.leverage
                 reward = profit
                 if profit > 0:
-                    reward += 5  # Bonus reward for making a profitable sell
+                    reward += 10  # Bonus reward for making a profitable sell
             else:
-                reward = -5  # Heavier penalty for invalid sell action
+                reward = -10  # Increased penalty for invalid sell action
 
         elif action == 0:  # Hold
             if self.holding:
-                reward = close_price - self.buy_price  # Reward or penalize based on holding performance
+                reward = (close_price - self.buy_price) * self.leverage  # Leverage applied to holding performance
 
         # Reward shaping based on indicators
         rsi = obs['RSI']
@@ -64,16 +67,16 @@ class StockTradingEnv(gym.Env):
 
         # Positive reward if RSI suggests oversold and we buy, or overbought and we sell.
         if (rsi < 30 and action == 1) or (rsi > 70 and action == 2):
-            reward += 3
+            reward += 5
 
         # Positive reward for buying when MACD is above signal line and vice-versa
         if (macd_diff > 0 and action == 1) or (macd_diff < 0 and action == 2):
-            reward += 3
+            reward += 5
 
         return reward
 
     def _calculate_final_reward(self):
         if self.holding:
             final_profit = self.data.iloc[-1]['Close'] - self.buy_price
-            return final_profit
+            return final_profit * self.leverage
         return 0
